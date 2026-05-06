@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ARG — Исследование</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0a0a2a;
+            color: #c0e0ff;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .game-container {
+            position: relative;
+            max-width: 1000px;
+            width: 100%;
+            background: #000;
+            border: 1px solid #2a6a8a;
+            border-radius: 8px;
+            overflow: hidden;
+            animation: flicker 0.3s infinite;
+            box-shadow: 0 0 20px rgba(0, 200, 255, 0.2);
+        }
+        .scene {
+            position: relative;
+        }
+        .scene img {
+            width: 100%;
+            display: block;
+        }
+        /* Красные зоны (потом сделаешь прозрачными) */
+        .click-zone {
+            position: absolute;
+            cursor: pointer;
+            background: rgba(255, 0, 0, 0.3);
+            border: 1px solid red;
+            transition: 0.2s;
+        }
+        .click-zone:hover {
+            background: rgba(255, 0, 0, 0.6);
+        }
+        /* Панель с текстом */
+        .message-panel {
+            background: #0a0a1a;
+            padding: 15px;
+            border-top: 1px solid #1a5a7a;
+            min-height: 80px;
+        }
+        #message-panel {
+            color: #00cccc;
+            font-family: monospace;
+            text-shadow: 0 0 5px #00aaaa;
+        }
+        /* Кнопка НАЗАД */
+        .back-button {
+            background: #0a1a2a;
+            color: #00cccc;
+            border: 1px solid #00cccc;
+            padding: 8px 16px;
+            margin: 10px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            transition: 0.2s;
+            display: inline-block;
+        }
+        .back-button:hover {
+            background: #00cccc;
+            color: #000;
+            box-shadow: 0 0 10px #00cccc;
+        }
+        .button-container {
+            text-align: right;
+            padding: 5px 10px;
+            background: #0a0a2a;
+            border-top: 1px solid #1a5a7a;
+        }
+        /* Эффект старого монитора */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0, 200, 255, 0.03) 0px, rgba(0, 200, 255, 0.03) 2px, transparent 2px, transparent 4px);
+            pointer-events: none;
+            z-index: 999;
+        }
+        /* Мерцание */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.88; }
+            10% { opacity: 0.97; }
+            15% { opacity: 0.92; }
+            100% { opacity: 0.97; }
+        }
+        /* Эффект помех */
+        .glitch {
+            animation: glitch 0.1s 2;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0); opacity: 1; }
+            20% { transform: translate(-2px, 1px); opacity: 0.8; }
+            40% { transform: translate(2px, -1px); opacity: 0.9; }
+            60% { transform: translate(-1px, 2px); opacity: 0.85; }
+            80% { transform: translate(1px, -2px); opacity: 0.95; }
+            100% { transform: translate(0); opacity: 1; }
+        }
+        /* Модальное окно для приближения стены */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .modal img {
+            max-width: 90%;
+            max-height: 80%;
+            border: 2px solid #00cccc;
+            box-shadow: 0 0 20px #00cccc;
+        }
+        .modal .close-modal {
+            margin-top: 20px;
+            background: #0a1a2a;
+            color: #00cccc;
+            border: 1px solid #00cccc;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        .modal .close-modal:hover {
+            background: #00cccc;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div id="scene-container" class="scene"></div>
+    <div class="message-panel">
+        <div id="message-panel">🔍 Кликай на красные зоны</div>
+    </div>
+    <div class="button-container">
+        <button class="back-button" id="back-button">⬅ НАЗАД</button>
+    </div>
+</div>
+
+<!-- Модальное окно для приближения стены -->
+<div id="wallModal" class="modal">
+    <img id="modalImage" src="" alt="Приближение стены">
+    <button class="close-modal" id="closeModal">ЗАКРЫТЬ</button>
+</div>
+
+<script>
+    function addGlitch() {
+        const container = document.querySelector('.game-container');
+        container.classList.add('glitch');
+        setTimeout(() => {
+            container.classList.remove('glitch');
+        }, 200);
+    }
+
+
+    const scenes = {
+        // ----- СЦЕНА 1 (entrance.png) -----
+        scene1: {
+            image: "images/entrance.png",
+            text: "Вход в странное место",
+            zones: [
+                {
+                    name: "переход_на_scene2",
+                    x1: 707, y1: 1426,
+                    x2: 1488, y2: 2747,
+                    action: "goToScene",
+                    target: "scene2",
+                    message: "Ты прошёл дальше."
+                }
+            ]
+        },
+        
+
+        scene2: {
+            image: "images/roomhole.png",
+            text: "Ты в центре. Справа — дверь, слева — коридор.",
+            zones: [
+                {
+                    name: "направо",
+                    x1: 1385, y1: 408,
+                    x2: 1915, y2: 1069,
+                    action: "goToScene",
+                    target: "scene2_1",
+                    message: "Ты повернул направо."
+                },
+                {
+                    name: "налево",
+                    x1: 664, y1: 655,
+                    x2: 782, y2: 850,
+                    action: "goToScene",
+                    target: "scene2_2",
+                    message: "Ты повернул налево."
+                }
+            ]
+        },
+        
+
+        scene2_1: {
+            image: "images/holeincity.png",
+            text: "Свет с множества домов. Почему-то они кажутся тоже одинокими.",
+            zones: []   
+        },
+
+        scene2_2: {
+            image: "images/darkholl.png",
+            text: "Ты в странной комнате. Дальше — темнота.",
+            zones: [
+                {
+                    name: "идти_в_темноту",
+                    x1: 600, y1: 500,
+                    x2: 1400, y2: 1500,
+                    action: "goToScene",
+                    target: "scene3",
+                    message: "Ты решаешь идти в темноту..."
+                }
+            ]
+        },
+        
+        
+        scene3: {
+            image: "images/wallsandempty.png",
+            text: "Ты в тёмном коридоре.",
+            zones: [
+                {
+                    name: "дальше_по_коридору",
+                    x1: 800, y1: 1000,
+                    x2: 1200, y2: 1500,
+                    action: "goToScene",
+                    target: "scene_phone",
+                    message: "Ты идёшь дальше по коридору..."
+                }
+            ]
+        },
+        
+        // ----- КОМНАТА С ТЕЛЕФОНОМ НА ПОЛУ -----
+        scene_phone: {
+            image: "images/roomamdcomp.png",
+            text: "Маленькая комната. Компьютер.",
+            zones: [
+                {
+                    name: "компьютер",
+                    x1: 600, y1: 800,
+                    x2: 1000, y2: 1200,
+                    action: "openLink",
+                    url: "https://другой-сайт.com",
+                    message: "работает"
+                },
+                {
+                    name: "выход_в_коридор",
+                    x1: 1200, y1: 500,
+                    x2: 1500, y2: 900,
+                    action: "goToScene",
+                    target: "scene_hallway",
+                    message: "Ты выходишь в длинный коридор."
+                }
+            ]
+        },
+        
+        // ----- ДЛИННЫЙ КОРИДОР -----
+        scene_hallway: {
+            image: "images/wallsandempty.png",
+            text: "...",
+            zones: [
+                {
+                    name: "дверь_в_конце",
+                    x1: 1300, y1: 400,
+                    x2: 1700, y2: 1000,
+                    action: "goToScene",
+                    target: "scene_before_last",
+                    message: "дверь открывается."
+                }
+            ]
+        },
+        
+        // ----- ПРЕДПОСЛЕДНЯЯ КОМНАТА -----
+        scene_before_last: {
+            image: "images/predlast.png",
+            text: "Пустая комната. Справа — проход дальше.",
+            zones: [
+                {
+                    name: "проход_дальше",
+                    x1: 1400, y1: 500,
+                    x2: 1900, y2: 1100,
+                    action: "goToScene",
+                    target: "scene_last",
+                    message: "Ты проходишь в последнюю комнату."
+                }
+            ]
+        },
+        
+        // ----- ФИНАЛЬНАЯ КОМНАТА -----
+        scene_last: {
+            image: "images/last_room.png",
+            text: "Последняя комната. Слева что-то лежит на полу. Справа стена с надписью.",
+            zones: [
+                {
+                    name: "предмет_на_полу",
+                    x1: 100, y1: 800,
+                    x2: 500, y2: 1300,
+                    action: "showItemMessage",
+                    coordinates: "TODO: заглушка",
+                    message: "..."
+                },
+                {
+                    name: "стена_справа",
+                    x1: 1400, y1: 300,
+                    x2: 1900, y2: 1200,
+                    action: "showWall",
+                    wallText: "ТЫ ПОЧТИ У ЦЕЛИ. ОСТАЛСЯ ПОСЛЕДНИЙ ШАГ.",
+                    wallImage: "images/wall_text.png",
+                    message: "Ты подходишь к стене и видишь надпись..."
+                }
+            ]
+        }
+    };
+    
+    // История переходов
+    let historyStack = ["scene1"];
+    let currentSceneId = "scene1";
+    
+    // Функция загрузки сцены
+    function loadScene(sceneId, addToHistory = true) {
+        const scene = scenes[sceneId];
+        if (!scene) {
+            console.error("Сцена не найдена:", sceneId);
+            return;
+        }
+        
+        if (addToHistory) {
+            if (historyStack[historyStack.length - 1] !== sceneId) {
+                historyStack.push(sceneId);
+            }
+        }
+        
+        currentSceneId = sceneId;
+        
+        const messagePanel = document.getElementById("message-panel");
+        messagePanel.innerHTML = scene.text ? `📌 ${scene.text}` : "🔍 Кликай на красные зоны";
+        
+        const container = document.getElementById("scene-container");
+        container.innerHTML = "";
+        
+        const img = document.createElement("img");
+        img.src = scene.image;
+        img.alt = sceneId;
+        container.appendChild(img);
+        
+        img.onload = () => {
+            const imgRect = img.getBoundingClientRect();
+            const scaleX = imgRect.width / img.naturalWidth;
+            const scaleY = imgRect.height / img.naturalHeight;
+            
+            scene.zones.forEach(zone => {
+                const clickDiv = document.createElement("div");
+                clickDiv.className = "click-zone";
+                
+                const width = zone.x2 - zone.x1;
+                const height = zone.y2 - zone.y1;
+                
+                clickDiv.style.left = (zone.x1 * scaleX) + "px";
+                clickDiv.style.top = (zone.y1 * scaleY) + "px";
+                clickDiv.style.width = (width * scaleX) + "px";
+                clickDiv.style.height = (height * scaleY) + "px";
+                clickDiv.style.position = "absolute";
+                
+                clickDiv.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    addGlitch();
+                    
+                    if (zone.message) {
+                        messagePanel.innerHTML = `🔍 ${zone.message}`;
+                    }
+                    
+                    if (zone.action === "goToScene") {
+                        loadScene(zone.target, true);
+                    } else if (zone.action === "openLink") {
+                        if (zone.url) {
+                            window.open(zone.url, "_blank");
+                        } else {
+                            messagePanel.innerHTML = "⚠️ Ссылка ещё не добавлена. (TODO)";
+                        }
+                    } else if (zone.action === "showItemMessage") {
+                        if (zone.coordinates) {
+                            messagePanel.innerHTML = `📦 ${zone.message.replace("[TODO]", zone.coordinates)}`;
+                        } else {
+                            messagePanel.innerHTML = `📦 ${zone.message}`;
+                        }
+                    } else if (zone.action === "showWall") {
+                        const modal = document.getElementById("wallModal");
+                        const modalImg = document.getElementById("modalImage");
+                        if (zone.wallImage) {
+                            modalImg.src = zone.wallImage;
+                            modalImg.style.display = "block";
+                        } else {
+                            modalImg.style.display = "none";
+                            const textDiv = document.createElement("div");
+                            textDiv.style.color = "#00cccc";
+                            textDiv.style.fontFamily = "monospace";
+                            textDiv.style.fontSize = "24px";
+                            textDiv.style.textAlign = "center";
+                            textDiv.innerText = zone.wallText || "Здесь что-то написано, но картинка не загружена.";
+                            modal.appendChild(textDiv);
+                        }
+                        modal.style.display = "flex";
+                    }
+                });
+                
+                container.appendChild(clickDiv);
+            });
+        };
+    }
+    
+    function goBack() {
+        if (historyStack.length > 1) {
+            addGlitch();
+            historyStack.pop();
+            const previousScene = historyStack[historyStack.length - 1];
+            loadScene(previousScene, false);
+        } else {
+            const messagePanel = document.getElementById("message-panel");
+            messagePanel.innerHTML = "⚠️ Это начало. Нельзя вернуться дальше.";
+            addGlitch();
+        }
+    }
+    
+    function closeModal() {
+        const modal = document.getElementById("wallModal");
+        modal.style.display = "none";
+        const extraDiv = modal.querySelector("div:not(#modalImage):not(.close-modal)");
+        if (extraDiv) extraDiv.remove();
+        const modalImg = document.getElementById("modalImage");
+        modalImg.style.display = "block";
+    }
+    
+    document.getElementById("back-button").addEventListener("click", goBack);
+    document.getElementById("closeModal").addEventListener("click", closeModal);
+    window.addEventListener("click", (e) => {
+        const modal = document.getElementById("wallModal");
+        if (e.target === modal) closeModal();
+    });
+    
+    loadScene(currentSceneId, true);
+</script>
+</body>
+</html>
